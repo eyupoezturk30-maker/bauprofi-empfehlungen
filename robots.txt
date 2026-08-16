@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/sitemap.xml
