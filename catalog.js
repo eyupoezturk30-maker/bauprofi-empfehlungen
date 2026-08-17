@@ -1,7 +1,14 @@
 (() => {
   const ep='https://fgcbnjdqgiobpyroizkc.supabase.co/functions/v1/track-affiliate-click';
   const params=new URLSearchParams(location.search);
+  if((params.get('src')||'').toLowerCase().trim()==='test'){
+    try{localStorage.setItem('bauprofi_owner_mode','1')}catch(_){}
+  }
+  let ownerMode=false;
+  try{ownerMode=localStorage.getItem('bauprofi_owner_mode')==='1'}catch(_){}
+
   let source=(params.get('src')||'').toLowerCase().trim();
+  if(ownerMode) source='test';
   if(!source){
     const ref=(document.referrer||'').toLowerCase();
     if(ref.includes('google.')) source='google';
@@ -14,7 +21,7 @@
   if(source==='test'){
     const b=document.createElement('div');
     b.className='test';
-    b.textContent='🧪 Kontrollmodus aktiv – Testklicks werden getrennt ausgewertet.';
+    b.textContent='🧪 Kontrollmodus aktiv – eigene Aufrufe und Testklicks werden getrennt ausgewertet.';
     document.body.prepend(b);
   }
   document.querySelectorAll('.affiliate[data-product]').forEach(a=>{
