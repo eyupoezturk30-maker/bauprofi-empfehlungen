@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - 'index.html'
+      - 'teilen.html'
       - 'analytics.js'
       - 'catalog.js'
       - 'catalog.css'
       - 'katalog/**'
+      - 'ratgeber/**'
       - 'bauprofi-dashboard.html'
       - 'robots.txt'
       - 'sitemap.xml'
@@ -22,9 +24,9 @@ jobs:
     steps:
       - name: Wait for GitHub Pages deployment
         if: github.event_name == 'push'
-        run: sleep 35
+        run: sleep 45
 
-      - name: Verify 100 options, affiliate tags and tracking end-to-end
+      - name: Verify 100 options, share page, buying guides and tracking end-to-end
         shell: bash
         run: |
           set -euo pipefail
@@ -33,7 +35,7 @@ jobs:
           FUNCTIONS='https://fgcbnjdqgiobpyroizkc.supabase.co/functions/v1'
 
           fetch_page() {
-            curl -fsSL --retry 8 --retry-all-errors --retry-delay 3 "$1"
+            curl -fsSL --retry 10 --retry-all-errors --retry-delay 3 "$1"
           }
 
           HTML="$(fetch_page "$SITE")"
@@ -55,7 +57,6 @@ jobs:
             'sicherheit-arbeitsschutz.html'
             'werkzeug-handwerk.html'
           )
-
           TOTAL_CATALOG=0
           for PAGE in "${CATALOG_PAGES[@]}"; do
             CATALOG="$(fetch_page "${SITE}katalog/${PAGE}")"
@@ -67,30 +68,49 @@ jobs:
           done
           test "$TOTAL_CATALOG" -eq 85
 
+          SHARE="$(fetch_page "${SITE}teilen.html")"
+          echo "$SHARE" | grep -q 'bauprofitipps-21'
+          echo "$SHARE" | grep -q 'navigator.share'
+          echo "$SHARE" | grep -q 'analytics.js'
+          SHARE_COUNT="$(printf '%s' "$SHARE" | grep -o 'class="buy affiliate"' | wc -l | tr -d ' ')"
+          test "$SHARE_COUNT" -eq 15
+
+          GUIDES=(
+            'bohrhammer-kaufhilfe.html'
+            'saegen-werkstatt-kaufhilfe.html'
+            'auto-pannenhilfe-kaufhilfe.html'
+            'strom-messtechnik-kaufhilfe.html'
+          )
+          for PAGE in "${GUIDES[@]}"; do
+            GUIDE="$(fetch_page "${SITE}ratgeber/${PAGE}")"
+            echo "$GUIDE" | grep -q 'Als Amazon-Partner verdiene ich an qualifizierten Verkäufen'
+            echo "$GUIDE" | grep -q 'tag=bauprofitipps-21'
+            echo "$GUIDE" | grep -q 'analytics.js'
+          done
+
           DASH="$(fetch_page "${SITE}bauprofi-dashboard.html")"
           echo "$DASH" | grep -q '100 Kaufoptionen'
           echo "$DASH" | grep -q 'bauprofi_owner_mode'
 
           fetch_page "${SITE}robots.txt" | grep -q 'Allow: /'
-          fetch_page "${SITE}sitemap.xml" | grep -q 'bauprofi-empfehlungen'
+          MAP="$(fetch_page "${SITE}sitemap.xml")"
+          echo "$MAP" | grep -q 'teilen.html'
+          echo "$MAP" | grep -q 'bohrhammer-kaufhilfe.html'
+          echo "$MAP" | grep -q 'auto-pannenhilfe-kaufhilfe.html'
 
           VISIT_RESPONSE="$(curl -fsS --retry 5 --retry-all-errors -X POST \
-            -H "Origin: ${ORIGIN}" \
-            -H 'Content-Type: application/json' \
+            -H "Origin: ${ORIGIN}" -H 'Content-Type: application/json' \
             --data '{"page":"/verification-test","source":"test"}' \
             "${FUNCTIONS}/track-affiliate-visit")"
           echo "$VISIT_RESPONSE" | grep -q '"ok":true'
 
           CLICK_RESPONSE="$(curl -fsS --retry 5 --retry-all-errors -X POST \
-            -H "Origin: ${ORIGIN}" \
-            -H 'Content-Type: application/json' \
+            -H "Origin: ${ORIGIN}" -H 'Content-Type: application/json' \
             --data '{"product":"knipex","source":"test"}' \
             "${FUNCTIONS}/track-affiliate-click")"
           echo "$CLICK_RESPONSE" | grep -q '"ok":true'
 
-          DASH_RESPONSE="$(curl -fsS --retry 5 --retry-all-errors \
-            -H "Origin: ${ORIGIN}" \
-            "${FUNCTIONS}/bauprofi-dashboard-data")"
+          DASH_RESPONSE="$(curl -fsS --retry 5 --retry-all-errors -H "Origin: ${ORIGIN}" "${FUNCTIONS}/bauprofi-dashboard-data")"
           echo "$DASH_RESPONSE" | grep -q '"ok":true'
 
-          echo "Verified: 15 direct products + 85 catalog options, Amazon tag, visit tracking, click tracking and dashboard data."
+          echo "Verified: 15 direct + 85 catalog options, 15 share links, 4 buying guides, Amazon tag and tracking."
