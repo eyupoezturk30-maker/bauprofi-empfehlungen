@@ -1,0 +1,28 @@
+name: Verify BauProfi Live
+
+on:
+  push:
+    paths:
+      - '.github/workflows/verify-bauprofi-live.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify live HTML, SEO files and tracking endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          SITE='https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/'
+          HTML="$(curl -fsSL --retry 5 --retry-delay 2 "$SITE")"
+          echo "$HTML" | grep -q 'analytics.js'
+          echo "$HTML" | grep -q 'tag=bauprofitipps-21'
+          curl -fsSL "${SITE}robots.txt" | grep -q 'Allow: /'
+          curl -fsSL "${SITE}sitemap.xml" | grep -q 'bauprofi-empfehlungen'
+          RESPONSE="$(curl -fsS -X POST \
+            -H 'Origin: https://eyupoezturk30-maker.github.io' \
+            -H 'Content-Type: application/json' \
+            --data '{"page":"/verification-test","source":"test"}' \
+            'https://fgcbnjdqgiobpyroizkc.supabase.co/functions/v1/track-affiliate-visit')"
+          echo "$RESPONSE" | grep -q '"ok":true'
+          echo 'Live page, Amazon tag, robots, sitemap and visit tracking verified.'
