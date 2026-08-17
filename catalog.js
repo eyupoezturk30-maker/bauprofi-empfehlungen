@@ -7,8 +7,11 @@
   let ownerMode=false;
   try{ownerMode=localStorage.getItem('bauprofi_owner_mode')==='1'}catch(_){}
 
+  // Betreiber-Klicks werden gar nicht gespeichert. Die Amazon-Links selbst
+  // funktionieren normal; nur unsere interne Statistik bleibt sauber.
+  if(ownerMode) return;
+
   let source=(params.get('src')||'').toLowerCase().trim();
-  if(ownerMode) source='test';
   if(!source){
     const ref=(document.referrer||'').toLowerCase();
     if(ref.includes('google.')) source='google';
@@ -18,12 +21,9 @@
     else if(ref.includes('facebook.')||ref.includes('fb.')) source='facebook';
     else source='direct';
   }
-  if(source==='test'){
-    const b=document.createElement('div');
-    b.className='test';
-    b.textContent='🧪 Kontrollmodus aktiv – eigene Aufrufe und Testklicks werden getrennt ausgewertet.';
-    document.body.prepend(b);
-  }
+  const allowed=new Set(['direct','google','bing','seo','whatsapp','linkedin','facebook','email','other']);
+  if(!allowed.has(source)) source='other';
+
   document.querySelectorAll('.affiliate[data-product]').forEach(a=>{
     a.addEventListener('click',()=>{
       fetch(ep,{
