@@ -15,33 +15,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Add visitor tracking and verify SEO
+      - name: Add visitor tracking and repair SEO basics
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           files = [Path('index.html'), *sorted(Path('ratgeber').glob('*.html'))]
           changed = []
 
           for path in files:
               text = path.read_text(encoding='utf-8')
+              original = text
+
               tag = '<script defer src="analytics.js"></script>' if path.name == 'index.html' else '<script defer src="../analytics.js"></script>'
               if 'analytics.js' not in text:
                   text = text.replace('</body>', tag + '</body>')
-                  path.write_text(text, encoding='utf-8')
-                  changed.append(str(path))
 
-              checks = {
+              if 'name="robots"' not in text:
+                  text = text.replace('</head>', '<meta name="robots" content="index,follow">\n</head>')
+
+              required = {
                   'title': '<title>' in text and '</title>' in text,
                   'description': 'name="description"' in text,
                   'canonical': 'rel="canonical"' in text,
                   'robots': 'name="robots"' in text,
               }
-              missing = [k for k, ok in checks.items() if not ok]
+              missing = [k for k, ok in required.items() if not ok]
               if missing:
-                  raise SystemExit(f'{path}: missing SEO fields: {missing}')
+                  raise SystemExit(f'{path}: missing SEO fields after repair: {missing}')
+
+              if text != original:
+                  path.write_text(text, encoding='utf-8')
+                  changed.append(str(path))
 
           robots = Path('robots.txt').read_text(encoding='utf-8')
           if 'Allow: /' not in robots or 'Sitemap:' not in robots:
@@ -56,11 +62,11 @@ jobs:
               if url not in sitemap:
                   raise SystemExit(f'sitemap missing {url}')
 
-          print('Tracking installed on:', ', '.join(changed) if changed else 'already installed')
+          print('Updated:', ', '.join(changed) if changed else 'nothing')
           print('SEO checks passed for', len(files), 'HTML pages')
           PY
 
-      - name: Commit tracking changes
+      - name: Commit tracking and SEO changes
         shell: bash
         run: |
           if git diff --quiet; then
@@ -70,5 +76,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html ratgeber/*.html
-          git commit -m "Enable BauProfi visitor tracking on all pages"
+          git commit -m "Enable BauProfi visitor tracking and repair SEO basics"
           git push
