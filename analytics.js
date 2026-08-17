@@ -7,11 +7,19 @@
     let ownerMode = false;
     try { ownerMode = localStorage.getItem('bauprofi_owner_mode') === '1'; } catch (_) {}
 
-    const sessionKey = 'bauprofi_visit_tracked_v4';
+    const sessionKey = 'bauprofi_visit_tracked_v5';
+
+    // Betreiber-Aufrufe werden ab jetzt vollständig ignoriert – sie werden
+    // weder als echte Besucher noch als Tests in der Datenbank gespeichert.
+    if (ownerMode) {
+      try { if (typeof s !== 'undefined') s = 'owner'; } catch (_) {}
+      try { sessionStorage.setItem(sessionKey, '1'); } catch (_) {}
+      return;
+    }
+
     if (sessionStorage.getItem(sessionKey)) return;
 
     let source = (params.get('src') || '').toLowerCase().trim();
-    if (ownerMode) source = 'test';
     if (!source) {
       const ref = (document.referrer || '').toLowerCase();
       if (ref.includes('google.')) source = 'google';
@@ -21,12 +29,8 @@
       else if (ref.includes('facebook.') || ref.includes('fb.')) source = 'facebook';
       else source = 'direct';
     }
-    const allowed = new Set(['direct','google','bing','seo','whatsapp','linkedin','facebook','email','test','other']);
+    const allowed = new Set(['direct','google','bing','seo','whatsapp','linkedin','facebook','email','other']);
     if (!allowed.has(source)) source = 'other';
-
-    // The root page has an inline click tracker using the global variable `s`.
-    // Keep that tracker in test mode as well when the owner opens the shop.
-    try { if (ownerMode && typeof s !== 'undefined') s = 'test'; } catch (_) {}
 
     fetch('https://fgcbnjdqgiobpyroizkc.supabase.co/functions/v1/track-affiliate-visit', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
