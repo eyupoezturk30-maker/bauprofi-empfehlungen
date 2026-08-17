@@ -1,6 +1,6 @@
 (() => {
   try {
-    const sessionKey = 'bauprofi_visit_tracked_v1';
+    const sessionKey = 'bauprofi_visit_tracked_v2';
     if (sessionStorage.getItem(sessionKey)) return;
 
     const params = new URLSearchParams(location.search);
@@ -23,8 +23,12 @@
       body: JSON.stringify({ page: location.pathname, source }),
       keepalive: true,
       mode: 'cors'
-    }).then(() => {
-      sessionStorage.setItem(sessionKey, '1');
-    }).catch(() => {});
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data || data.ok !== true) throw new Error('visit tracking failed');
+        sessionStorage.setItem(sessionKey, '1');
+      })
+      .catch(() => {});
   } catch (_) {}
 })();
