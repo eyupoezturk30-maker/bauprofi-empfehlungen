@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - 'index.html'
+      - 'teilen.html'
       - 'katalog/**'
       - 'ratgeber/**'
       - 'sitemap.xml'
@@ -17,7 +18,7 @@ jobs:
   submit:
     runs-on: ubuntu-latest
     steps:
-      - name: Submit URLs when IndexNow key is live
+      - name: Submit all sitemap URLs when IndexNow key is live
         shell: bash
         run: |
           set -u
@@ -33,12 +34,27 @@ jobs:
             echo "::warning::IndexNow key is not live yet. Skipping without failure; daily retry will try again."
             exit 0
           fi
-          cat > payload.json <<'JSON'
-          {"host":"eyupoezturk30-maker.github.io","key":"f3c9d7a86b1542e4a7c3f9b5d1e8a642","keyLocation":"https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/f3c9d7a86b1542e4a7c3f9b5d1e8a642.txt","urlList":["https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/bohren-meisseln.html","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/saegen-holzbau.html","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/messtechnik-baustelle.html","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/werkstatt-reinigung.html","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/auto-batterie-pannenhilfe.html","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/reifen-pflege.html","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/garten-maschinen.html","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/baustellen-strom.html","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/sicherheit-arbeitsschutz.html","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/werkzeug-handwerk.html","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/powerbank-baustelle.html","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/wasserpumpenzange-montage.html","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/laser-entfernungsmesser-baustelle.html","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/reifenkompressor-auto.html","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/starthilfe-powerbank-auto.html","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/mobile-klimaanlage-sommer.html","https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/turmventilator-sommer.html"]}
-          JSON
+          if ! curl -fsSL --retry 6 --retry-all-errors --retry-delay 3 --connect-timeout 15 --max-time 45 "${SITE}/sitemap.xml" -o sitemap.xml; then
+            echo "::warning::Sitemap not reachable yet. Skipping without failure; daily retry will try again."
+            exit 0
+          fi
+          python3 - <<'PY'
+          import json, xml.etree.ElementTree as ET
+          root=ET.parse('sitemap.xml').getroot()
+          ns={'s':'http://www.sitemaps.org/schemas/sitemap/0.9'}
+          urls=[x.text.strip() for x in root.findall('s:url/s:loc',ns) if x.text and x.text.strip()]
+          payload={
+            'host':'eyupoezturk30-maker.github.io',
+            'key':'f3c9d7a86b1542e4a7c3f9b5d1e8a642',
+            'keyLocation':'https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/f3c9d7a86b1542e4a7c3f9b5d1e8a642.txt',
+            'urlList':urls
+          }
+          with open('payload.json','w',encoding='utf-8') as f: json.dump(payload,f,ensure_ascii=False)
+          print(f'Prepared {len(urls)} BauProfi URLs from sitemap.xml')
+          PY
           code=$(curl -sS -o response.txt -w '%{http_code}' --connect-timeout 15 --max-time 45 --retry 5 --retry-all-errors --retry-delay 3 -H 'Content-Type: application/json; charset=utf-8' -d @payload.json https://api.indexnow.org/indexnow || true)
           if [ "$code" = "200" ] || [ "$code" = "202" ]; then
-            echo "IndexNow accepted BauProfi URLs with HTTP $code"
+            echo "IndexNow accepted all sitemap URLs with HTTP $code"
           else
             echo "::warning::IndexNow returned HTTP ${code:-unknown}; not marking workflow failed. Daily retry will try again."
             cat response.txt 2>/dev/null || true
