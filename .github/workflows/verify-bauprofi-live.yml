@@ -3,26 +3,94 @@ name: Verify BauProfi Live
 on:
   push:
     paths:
+      - 'index.html'
+      - 'analytics.js'
+      - 'catalog.js'
+      - 'catalog.css'
+      - 'katalog/**'
+      - 'bauprofi-dashboard.html'
+      - 'robots.txt'
+      - 'sitemap.xml'
       - '.github/workflows/verify-bauprofi-live.yml'
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
 
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify live HTML, SEO files and tracking endpoint
+      - name: Wait for GitHub Pages deployment
+        if: github.event_name == 'push'
+        run: sleep 35
+
+      - name: Verify 100 options, affiliate tags and tracking end-to-end
         shell: bash
         run: |
           set -euo pipefail
           SITE='https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/'
-          HTML="$(curl -fsSL --retry 5 --retry-delay 2 "$SITE")"
+          ORIGIN='https://eyupoezturk30-maker.github.io'
+          FUNCTIONS='https://fgcbnjdqgiobpyroizkc.supabase.co/functions/v1'
+
+          fetch_page() {
+            curl -fsSL --retry 8 --retry-all-errors --retry-delay 3 "$1"
+          }
+
+          HTML="$(fetch_page "$SITE")"
+          echo "$HTML" | grep -q '100 Kaufoptionen'
           echo "$HTML" | grep -q 'analytics.js'
           echo "$HTML" | grep -q 'tag=bauprofitipps-21'
-          curl -fsSL "${SITE}robots.txt" | grep -q 'Allow: /'
-          curl -fsSL "${SITE}sitemap.xml" | grep -q 'bauprofi-empfehlungen'
-          RESPONSE="$(curl -fsS -X POST \
-            -H 'Origin: https://eyupoezturk30-maker.github.io' \
+          DIRECT_COUNT="$(printf '%s' "$HTML" | grep -o 'class="cta affiliate"' | wc -l | tr -d ' ')"
+          test "$DIRECT_COUNT" -eq 15
+
+          CATALOG_PAGES=(
+            'bohren-meisseln.html'
+            'saegen-holzbau.html'
+            'messtechnik-baustelle.html'
+            'werkstatt-reinigung.html'
+            'auto-batterie-pannenhilfe.html'
+            'reifen-pflege.html'
+            'garten-maschinen.html'
+            'baustellen-strom.html'
+            'sicherheit-arbeitsschutz.html'
+            'werkzeug-handwerk.html'
+          )
+
+          TOTAL_CATALOG=0
+          for PAGE in "${CATALOG_PAGES[@]}"; do
+            CATALOG="$(fetch_page "${SITE}katalog/${PAGE}")"
+            echo "$CATALOG" | grep -q 'catalog.js'
+            echo "$CATALOG" | grep -q 'analytics.js'
+            echo "$CATALOG" | grep -q 'tag=bauprofitipps-21'
+            COUNT="$(printf '%s' "$CATALOG" | grep -o 'class="cta affiliate"' | wc -l | tr -d ' ')"
+            TOTAL_CATALOG=$((TOTAL_CATALOG + COUNT))
+          done
+          test "$TOTAL_CATALOG" -eq 85
+
+          DASH="$(fetch_page "${SITE}bauprofi-dashboard.html")"
+          echo "$DASH" | grep -q '100 Kaufoptionen'
+          echo "$DASH" | grep -q 'bauprofi_owner_mode'
+
+          fetch_page "${SITE}robots.txt" | grep -q 'Allow: /'
+          fetch_page "${SITE}sitemap.xml" | grep -q 'bauprofi-empfehlungen'
+
+          VISIT_RESPONSE="$(curl -fsS --retry 5 --retry-all-errors -X POST \
+            -H "Origin: ${ORIGIN}" \
             -H 'Content-Type: application/json' \
             --data '{"page":"/verification-test","source":"test"}' \
-            'https://fgcbnjdqgiobpyroizkc.supabase.co/functions/v1/track-affiliate-visit')"
-          echo "$RESPONSE" | grep -q '"ok":true'
-          echo 'Live page, Amazon tag, robots, sitemap and visit tracking verified.'
+            "${FUNCTIONS}/track-affiliate-visit")"
+          echo "$VISIT_RESPONSE" | grep -q '"ok":true'
+
+          CLICK_RESPONSE="$(curl -fsS --retry 5 --retry-all-errors -X POST \
+            -H "Origin: ${ORIGIN}" \
+            -H 'Content-Type: application/json' \
+            --data '{"product":"knipex","source":"test"}' \
+            "${FUNCTIONS}/track-affiliate-click")"
+          echo "$CLICK_RESPONSE" | grep -q '"ok":true'
+
+          DASH_RESPONSE="$(curl -fsS --retry 5 --retry-all-errors \
+            -H "Origin: ${ORIGIN}" \
+            "${FUNCTIONS}/bauprofi-dashboard-data")"
+          echo "$DASH_RESPONSE" | grep -q '"ok":true'
+
+          echo "Verified: 15 direct products + 85 catalog options, Amazon tag, visit tracking, click tracking and dashboard data."
