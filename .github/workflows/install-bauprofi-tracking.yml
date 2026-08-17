@@ -1,0 +1,74 @@
+name: Install BauProfi Tracking
+
+on:
+  push:
+    paths:
+      - '.github/workflows/install-bauprofi-tracking.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Add visitor tracking and verify SEO
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          files = [Path('index.html'), *sorted(Path('ratgeber').glob('*.html'))]
+          changed = []
+
+          for path in files:
+              text = path.read_text(encoding='utf-8')
+              tag = '<script defer src="analytics.js"></script>' if path.name == 'index.html' else '<script defer src="../analytics.js"></script>'
+              if 'analytics.js' not in text:
+                  text = text.replace('</body>', tag + '</body>')
+                  path.write_text(text, encoding='utf-8')
+                  changed.append(str(path))
+
+              checks = {
+                  'title': '<title>' in text and '</title>' in text,
+                  'description': 'name="description"' in text,
+                  'canonical': 'rel="canonical"' in text,
+                  'robots': 'name="robots"' in text,
+              }
+              missing = [k for k, ok in checks.items() if not ok]
+              if missing:
+                  raise SystemExit(f'{path}: missing SEO fields: {missing}')
+
+          robots = Path('robots.txt').read_text(encoding='utf-8')
+          if 'Allow: /' not in robots or 'Sitemap:' not in robots:
+              raise SystemExit('robots.txt is not correctly configured')
+
+          sitemap = Path('sitemap.xml').read_text(encoding='utf-8')
+          for path in files:
+              if path.name == 'index.html':
+                  url = 'https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/'
+              else:
+                  url = 'https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/' + str(path).replace('\\', '/')
+              if url not in sitemap:
+                  raise SystemExit(f'sitemap missing {url}')
+
+          print('Tracking installed on:', ', '.join(changed) if changed else 'already installed')
+          print('SEO checks passed for', len(files), 'HTML pages')
+          PY
+
+      - name: Commit tracking changes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No HTML changes needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html ratgeber/*.html
+          git commit -m "Enable BauProfi visitor tracking on all pages"
+          git push
