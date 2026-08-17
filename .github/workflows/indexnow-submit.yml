@@ -1,0 +1,57 @@
+name: Submit BauProfi to IndexNow
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'index.html'
+      - 'katalog/**'
+      - 'ratgeber/**'
+      - 'sitemap.xml'
+      - 'f3c9d7a86b1542e4a7c3f9b5d1e8a642.txt'
+      - '.github/workflows/indexnow-submit.yml'
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for GitHub Pages deployment
+        run: sleep 45
+      - name: Submit URLs to IndexNow
+        shell: bash
+        run: |
+          set -euo pipefail
+          SITE='https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen'
+          KEY='f3c9d7a86b1542e4a7c3f9b5d1e8a642'
+          curl -fsSL --retry 5 --retry-all-errors "${SITE}/${KEY}.txt" | grep -q "$KEY"
+          cat > payload.json <<'JSON'
+          {
+            "host": "eyupoezturk30-maker.github.io",
+            "key": "f3c9d7a86b1542e4a7c3f9b5d1e8a642",
+            "keyLocation": "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/f3c9d7a86b1542e4a7c3f9b5d1e8a642.txt",
+            "urlList": [
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/bohren-meisseln.html",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/saegen-holzbau.html",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/messtechnik-baustelle.html",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/werkstatt-reinigung.html",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/auto-batterie-pannenhilfe.html",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/reifen-pflege.html",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/garten-maschinen.html",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/baustellen-strom.html",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/sicherheit-arbeitsschutz.html",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/katalog/werkzeug-handwerk.html",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/powerbank-baustelle.html",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/wasserpumpenzange-montage.html",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/laser-entfernungsmesser-baustelle.html",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/reifenkompressor-auto.html",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/starthilfe-powerbank-auto.html",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/mobile-klimaanlage-sommer.html",
+              "https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/turmventilator-sommer.html"
+            ]
+          }
+          JSON
+          code=$(curl -sS -o response.txt -w '%{http_code}' --retry 5 --retry-all-errors -H 'Content-Type: application/json; charset=utf-8' -d @payload.json https://api.indexnow.org/indexnow)
+          test "$code" = "200" -o "$code" = "202"
+          echo "IndexNow accepted BauProfi URLs with HTTP $code"
