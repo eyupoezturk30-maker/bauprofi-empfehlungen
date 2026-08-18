@@ -1,0 +1,49 @@
+name: Enable BauProfi Sharing
+
+on:
+  push:
+    paths:
+      - '.github/workflows/enable-bauprofi-sharing.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add tracked sharing buttons
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          share = Path('teilen.html')
+          text = share.read_text(encoding='utf-8')
+          if 'bauprofi-channel-share-v1' not in text:
+              css = '''\n/* bauprofi-channel-share-v1 */\n.channel-row{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:9px}.channel-row a{display:block;border-radius:10px;padding:10px 7px;text-align:center;text-decoration:none;font-size:12px;font-weight:900}.ch-wa{background:#e9f8ee;color:#116b36}.ch-li{background:#eaf2fb;color:#0a66c2}.ch-fb{background:#eef3ff;color:#1657a8}.ch-mail{background:#f0f0ed;color:#222}@media(max-width:520px){.channel-row{grid-template-columns:1fr 1fr}}\n'''
+              text = text.replace('</style>', css + '</style>')
+              js = r'''\n<script id="bauprofi-channel-share-v1">\n(() => {\n  const base = (id, src) => new URL('teilen.html?src=' + encodeURIComponent(src) + '#' + id, location.href).href;\n  const enc = encodeURIComponent;\n  document.querySelectorAll('.card .actions').forEach(actions => {\n    if (actions.querySelector('.channel-row')) return;\n    const seed = actions.querySelector('button.share[data-id]');\n    if (!seed) return;\n    const id = seed.dataset.id;\n    const name = seed.dataset.name || 'BauProfi Empfehlung';\n    const row = document.createElement('div');\n    row.className = 'channel-row';\n    const wa = base(id, 'whatsapp');\n    const li = base(id, 'linkedin');\n    const fb = base(id, 'facebook');\n    const em = base(id, 'email');\n    row.innerHTML = `\n      <a class="ch-wa" target="_blank" rel="noopener" href="https://wa.me/?text=${enc('BauProfi Kaufhilfe: ' + name + ' ' + wa)}">WhatsApp</a>\n      <a class="ch-li" target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=${enc(li)}">LinkedIn</a>\n      <a class="ch-fb" target="_blank" rel="noopener" href="https://www.facebook.com/sharer/sharer.php?u=${enc(fb)}">Facebook</a>\n      <a class="ch-mail" href="mailto:?subject=${enc('BauProfi Kaufhilfe: ' + name)}&body=${enc('Hier ist die Empfehlung: ' + em)}">E-Mail</a>`;\n    actions.insertAdjacentElement('afterend', row);\n  });\n})();\n</script>\n'''
+              text = text.replace('</body>', js + '</body>')
+              share.write_text(text, encoding='utf-8')
+
+          home = Path('index.html')
+          h = home.read_text(encoding='utf-8')
+          h = h.replace('<a href="ratgeber/index.html">Ratgeber</a></nav>', '<a href="ratgeber/index.html">Ratgeber</a><a href="teilen.html">Teilen</a></nav>')
+          if 'Empfehlungen teilen' not in h:
+              h = h.replace('<a class="secondary" href="#katalog">Alle 85 Kauf-Suchen</a>', '<a class="secondary" href="#katalog">Alle 85 Kauf-Suchen</a><a class="secondary" href="teilen.html">Empfehlungen teilen ↗</a>')
+          home.write_text(h, encoding='utf-8')
+          PY
+      - name: Commit changes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add teilen.html index.html
+          git commit -m "Add tracked social sharing for BauProfi"
+          git push
