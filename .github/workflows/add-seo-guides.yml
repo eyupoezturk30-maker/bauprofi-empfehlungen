@@ -1,0 +1,64 @@
+name: Add BauProfi SEO Guides
+
+on:
+  push:
+    paths:
+      - '.github/workflows/add-seo-guides.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Link new guides and update sitemap
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          idx = Path('ratgeber/index.html')
+          text = idx.read_text(encoding='utf-8')
+          marker = '</div><h2 class="section-title">Werkzeug & Baustelle</h2>'
+          cards = ('<a class="card hot" href="industriesauger-staubklasse-m-kaufen.html"><div class="tag">Reinigung & Staub</div><b>Industriesauger Staubklasse M</b><span>Staubklasse, Filterreinigung, Behälter und Gerätesteckdose vor dem Kauf prüfen.</span></a>'
+                   '<a class="card hot" href="tischkreissaege-baustelle-kaufen.html"><div class="tag">Holzbau & Ausbau</div><b>Tischkreissäge für Baustelle</b><span>Schnitttiefe, Schnittbreite, Transport und Absaugung passend auswählen.</span></a>'
+                   '<a class="card hot" href="paneelsaege-216mm-kaufen.html"><div class="tag">Montage & Holz</div><b>Paneelsäge 216 mm</b><span>Schnittbreite, Gehrung, Mobilität und Absaugung vor dem Kauf vergleichen.</span></a>')
+          if 'industriesauger-staubklasse-m-kaufen.html' not in text:
+              if marker not in text:
+                  raise SystemExit('Ratgeber marker not found')
+              text = text.replace(marker, cards + marker, 1)
+              idx.write_text(text, encoding='utf-8')
+
+          sm = Path('sitemap.xml')
+          s = sm.read_text(encoding='utf-8')
+          urls = [
+            'https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/industriesauger-staubklasse-m-kaufen.html',
+            'https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/tischkreissaege-baustelle-kaufen.html',
+            'https://eyupoezturk30-maker.github.io/bauprofi-empfehlungen/ratgeber/paneelsaege-216mm-kaufen.html',
+          ]
+          additions = ''.join(f'  <url><loc>{u}</loc><lastmod>2026-08-18</lastmod></url>\n' for u in urls if u not in s)
+          if additions:
+              s = s.replace('</urlset>', additions + '</urlset>')
+              sm.write_text(s, encoding='utf-8')
+
+          for p in ['ratgeber/industriesauger-staubklasse-m-kaufen.html','ratgeber/tischkreissaege-baustelle-kaufen.html','ratgeber/paneelsaege-216mm-kaufen.html']:
+              t = Path(p).read_text(encoding='utf-8')
+              for req in ['<title>', 'name="description"', 'rel="canonical"', 'name="robots"', 'analytics.js', 'bauprofitipps-21']:
+                  if req not in t:
+                      raise SystemExit(f'{p} missing {req}')
+          print('SEO guides linked and verified')
+          PY
+      - name: Commit changes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ratgeber/index.html sitemap.xml
+          git commit -m "Link new high-intent BauProfi guides"
+          git push
