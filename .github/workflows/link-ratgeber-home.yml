@@ -1,0 +1,44 @@
+name: Link BauProfi Ratgeber on Home
+
+on:
+  push:
+    paths:
+      - '.github/workflows/link-ratgeber-home.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add guide links to homepage
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          t = p.read_text(encoding='utf-8')
+          if 'href="ratgeber/index.html"' not in t:
+              t = t.replace('<a href="#katalog">85 Suchen</a></nav>', '<a href="#katalog">85 Suchen</a><a href="ratgeber/index.html">Ratgeber</a></nav>', 1)
+          block = '''<section class="sec" id="ratgeber"><div class="head"><h2>Kauf-Ratgeber mit konkretem Einsatz</h2><p>Für Besucher, die noch vor der Produktentscheidung stehen: erst Bedarf klären, dann direkt zur passenden Empfehlung.</p></div><div class="quick"><a href="ratgeber/industriesauger-staubklasse-m-kaufen.html"><div><em>Reinigung & Staub</em><b>Industriesauger Staubklasse M kaufen</b></div><span>→ Staubklasse, Filter und Anschluss prüfen</span></a><a href="ratgeber/tischkreissaege-baustelle-kaufen.html"><div><em>Holzbau & Ausbau</em><b>Tischkreissäge für Baustelle kaufen</b></div><span>→ Schnittbreite, Transport und Absaugung</span></a><a href="ratgeber/paneelsaege-216mm-kaufen.html"><div><em>Montage & Holz</em><b>Paneelsäge 216 mm kaufen</b></div><span>→ Schnittbreite, Gehrung und Mobilität</span></a></div><a class="big" href="ratgeber/index.html">Alle BauProfi Kauf-Ratgeber öffnen →</a></section>'''
+          marker = '<section class="sec"><div class="head"><h2>Warum diese Seite kaufstärker aufgebaut ist</h2>'
+          if 'id="ratgeber"' not in t:
+              if marker not in t:
+                  raise SystemExit('homepage marker not found')
+              t = t.replace(marker, block + '\n' + marker, 1)
+          p.write_text(t, encoding='utf-8')
+          PY
+      - name: Commit changes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Link high-intent guides from homepage"
+          git push
