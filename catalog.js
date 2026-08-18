@@ -7,7 +7,7 @@
   let ownerMode=false;
   try{ownerMode=localStorage.getItem('bauprofi_owner_mode')==='1'}catch(_){}
 
-  // Betreiber-Klicks werden gar nicht gespeichert. Die Amazon-Links selbst
+  // Betreiber-Klicks werden nicht gespeichert. Die Amazon-Links selbst
   // funktionieren normal; nur unsere interne Statistik bleibt sauber.
   if(ownerMode) return;
 
@@ -24,15 +24,24 @@
   const allowed=new Set(['direct','google','bing','seo','whatsapp','linkedin','facebook','email','other']);
   if(!allowed.has(source)) source='other';
 
-  document.querySelectorAll('.affiliate[data-product]').forEach(a=>{
-    a.addEventListener('click',()=>{
-      fetch(ep,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({product:a.dataset.product,source}),
-        keepalive:true,
-        mode:'cors'
-      }).catch(()=>{});
-    });
-  });
+  // Delegierter Capture-Handler: funktioniert auch bei dynamischen Links und
+  // wird ausgelöst, bevor der Browser den neuen Amazon-Tab öffnet.
+  document.addEventListener('click',e=>{
+    const a=e.target.closest && e.target.closest('a.affiliate[data-product]');
+    if(!a) return;
+    const payload=JSON.stringify({product:a.dataset.product,source});
+
+    // sendBeacon ist für Navigationen/Tabwechsel auf iPhone/Safari zuverlässiger.
+    let sent=false;
+    try{
+      if(navigator.sendBeacon) sent=navigator.sendBeacon(ep,payload);
+    }catch(_){}
+
+    // Fallback für Browser ohne Beacon bzw. wenn Beacon abgelehnt wurde.
+    if(!sent){
+      try{
+        fetch(ep,{method:'POST',headers:{'Content-Type':'application/json'},body:payload,keepalive:true,mode:'cors'}).catch(()=>{});
+      }catch(_){}
+    }
+  },true);
 })();
